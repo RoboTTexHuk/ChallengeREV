@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Vacation Challenge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#000000',
+            surface:    '#1C1C1E',
+            surface2:   '#2C2C2E',
+            primary:    '#00F0FF',
+            textMain:   '#FFFFFF',
+            textMuted:  '#8E8E93',
+            danger:     '#FF453A',
+            success:    '#30D158',
+          },
+          fontFamily: {
+            sans: ['-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Helvetica','Arial','sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    html, body { background:#000; color:#fff; }
+    body { -webkit-tap-highlight-color: transparent; font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #2C2C2E; border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    input[type="range"]{ -webkit-appearance:none; width:100%; background:transparent; }
+    input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; height:22px; width:22px; border-radius:50%; background:#00F0FF; cursor:pointer; margin-top:-9px; }
+    input[type="range"]::-webkit-slider-runnable-track{ width:100%; height:4px; background:#3A3A3C; border-radius:2px; }
+    .strike { text-decoration: line-through; color:#8E8E93; }
+    .glow { box-shadow: 0 0 24px rgba(0,240,255,.30); }
+    .fade-in { animation: fade .25s ease both; }
+    @keyframes fade { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none;} }
+    [contenteditable]:focus { outline: 1px solid #00F0FF; border-radius: 6px; }
+    /* hide arrows on date input */
+    input[type=date] { color-scheme: dark; }
+  </style>
+</head>
+<body class="bg-background text-textMain min-h-screen">
+
+  <!-- ====================================================================
+       App shell
+       ==================================================================== -->
+  <div class="mx-auto flex flex-col min-h-screen max-w-6xl">
+
+    <!-- Header -->
+    <header class="px-5 pt-6 pb-4 sticky top-0 bg-background/85 backdrop-blur-md z-30 border-b border-surface">
+      <div class="flex items-end justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-textMuted">Vacation Challenge</p>
+          <h1 id="headerTitle" class="text-3xl font-bold tracking-tight">New Challenge</h1>
+        </div>
+        <div id="headerExtra" class="text-textMuted text-sm"></div>
+      </div>
+    </header>
+
+    <!-- Views -->
+    <main class="flex-1 px-5 pb-32 pt-4">
+      <section id="view-challenge"  class="space-y-6 fade-in"></section>
+      <section id="view-list"       class="space-y-6 fade-in hidden"></section>
+      <section id="view-analytics"  class="space-y-6 fade-in hidden"></section>
+      <section id="view-profile"    class="space-y-6 fade-in hidden"></section>
+    </main>
+
+    <!-- Tab bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-surface2 z-40">
+      <div class="mx-auto max-w-6xl flex justify-around items-center py-2 px-2">
+        <button data-tab="challenge" class="tabBtn flex flex-col items-center gap-1 p-2 w-20 text-primary">
+          <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+          <span class="text-[11px] font-medium">Challenge</span>
+        </button>
+        <button data-tab="list" class="tabBtn flex flex-col items-center gap-1 p-2 w-20 text-textMuted">
+          <i class="fa-solid fa-list-check text-xl"></i>
+          <span class="text-[11px] font-medium">List</span>
+        </button>
+        <button data-tab="analytics" class="tabBtn flex flex-col items-center gap-1 p-2 w-20 text-textMuted">
+          <i class="fa-solid fa-chart-pie text-xl"></i>
+          <span class="text-[11px] font-medium">Analytics</span>
+        </button>
+        <button data-tab="profile" class="tabBtn flex flex-col items-center gap-1 p-2 w-20 text-textMuted">
+          <i class="fa-regular fa-user text-xl"></i>
+          <span class="text-[11px] font-medium">Profile</span>
+        </button>
+      </div>
+      <div class="h-[env(safe-area-inset-bottom)] bg-surface"></div>
+    </nav>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md hidden items-end sm:items-center justify-center">
+    <div id="modalContent" class="w-full sm:w-[640px] max-w-[95vw] max-h-[92vh] overflow-y-auto bg-surface rounded-t-3xl sm:rounded-3xl border border-surface2"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-surface2 text-white text-sm px-4 py-2 rounded-full opacity-0 transition-opacity"></div>
+
+  <script>
+  /* ===================================================================
+     STATE
+     =================================================================== */
+  const LS_CHALLENGES = 'vc.challenges.v1';
+  const LS_PROFILE    = 'vc.profile.v1';
+
+  const VTYPES = [
+    { id:'beach',     title:'Beach',     icon:'fa-umbrella-beach' },
+    { id:'mountains', title:'Mountains', icon:'fa-mountain-sun'   },
+    { id:'city',      title:'City',      icon:'fa-city'           },
+    { id:'spa',       title:'Spa',       icon:'fa-spa'            },
+    { id:'nature',    title:'Nature',    icon:'fa-tree'           },
+    { id:'adventure', title:'Adventure', icon:'fa-person-hiking'  },
+    { id:'roadTrip',  title:'Road trip', icon:'fa-car'            },
+  ];
+  const DURATIONS = [
+    { id:'oneDay',    title:'1 day',   days:1,  tasks:5 },
+    { id:'weekend',   title:'Weekend', days:2,  tasks:6 },
+    { id:'threeFive', title:'3–5 days',days:4,  tasks:7 },
+    { id:'week',      title:'1 week',  days:7,  tasks:8 },
+    { id:'longer',    title:'Longer',  days:14, tasks:10 },
+  ];
+  const BUDGETS = [
+    { id:'low',    title:'Low'    },
+    { id:'medium', title:'Medium' },
+    { id:'high',   title:'High'   },
+  ];
+  const STYLES = [
+    { id:'active',   title:'Active'   },
+    { id:'relaxing', title:'Relaxing' },
+    { id:'mixed',    title:'Mixed'    },
+  ];
+  const STATUSES = [
+    { id:'planned',    title:'Planned',     color:'text-textMuted', dot:'bg-textMuted' },
+    { id:'inProgress', title:'In progress', color:'text-primary',   dot:'bg-primary'   },
+    { id:'completed',  title:'Completed',   color:'text-success',   dot:'bg-success'   },
+  ];
+
+  const DESTINATIONS = {
+    beach:     ['Bali, Indonesia','Maldives','Phuket, Thailand','Crete, Greece','Cascais, Portugal','Tulum, Mexico'],
+    mountains: ['Swiss Alps, Switzerland','Banff, Canada','Patagonia, Argentina','Dolomites, Italy','Lofoten Islands, Norway'],
+    city:      ['Tokyo, Japan','Lisbon, Portugal','Barcelona, Spain','Istanbul, Türkiye','Seoul, South Korea','Mexico City, Mexico'],
+    spa:       ['Budapest, Hungary','Reykjavik, Iceland','Baden-Baden, Germany','Hakone, Japan'],
+    nature:    ['Costa Rica jungles, Costa Rica','Lake Bled, Slovenia','Plitvice Lakes, Croatia','Faroe Islands, Denmark'],
+    adventure: ['Iceland Ring Road, Iceland','Annapurna, Nepal','Queenstown, New Zealand','Sahara, Morocco'],
+    roadTrip:  ['Pacific Coast Highway, USA','Romantic Road, Germany','Garden Route, South Africa','Ring of Kerry, Ireland'],
+  };
+
+  const TASK_POOL = [
+    "Take 10 photos of the sunset",
+    "Talk to a local and get an insider tip",
+    "Try a new local dish you've never had before",
+    "Spend one full day without your phone",
+    "Visit a place that isn't in your guidebook",
+    "Send a postcard to a friend back home",
+    "Walk at least 15,000 steps in one day",
+    "Learn 5 phrases in the local language",
+    "Find a hidden street-food spot",
+    "Watch the sunrise from a viewpoint",
+    "Take a photo with a stranger (with permission)",
+    "Buy a handmade souvenir from a local artisan",
+    "Try a new mode of transport (boat, tuk-tuk, train…)",
+    "Visit a local market and buy something fresh",
+    "Write a short journal entry every evening",
+    "Wake up before 7 AM at least once",
+    "Have a meal alone at a local restaurant",
+    "Visit a museum or gallery you've never heard of",
+    "Try the local drink (alcoholic or not)",
+    "Spend an hour just sitting and people-watching"
+  ];
+
+  const State = {
+    view: 'challenge',
+    challenges: [],
+    profile: { name:'Traveler', avatarData:null },
+    form: { type:'beach', duration:'week', budget:'medium', style:'mixed', wishes:'' },
+    generated: null,
+    filter: null,
+    sort: 'dateDesc',
+    detailId: null,
+    appearance: localStorage.getItem('vc.appearance') || 'dark',
+    charts: {}, // chart instances
+  };
+
+  function uid(){ return 'c_' + Math.random().toString(36).slice(2,11) + Date.now().toString(36); }
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  function save(){
+    localStorage.setItem(LS_CHALLENGES, JSON.stringify(State.challenges));
+    localStorage.setItem(LS_PROFILE,    JSON.stringify(State.profile));
+  }
+  function load(){
+    try { State.challenges = JSON.parse(localStorage.getItem(LS_CHALLENGES) || '[]'); } catch(_) {}
+    try { State.profile    = JSON.parse(localStorage.getItem(LS_PROFILE)    || '{"name":"Traveler","avatarData":null}'); } catch(_) {}
+  }
+
+  function toast(text){
+    const t = document.getElementById('toast');
+    t.textContent = text;
+    t.style.opacity = '1';
+    clearTimeout(window.__toast);
+    window.__toast = setTimeout(()=>{ t.style.opacity = '0'; }, 1800);
+  }
+
+  function fmtDate(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined,{ year:'numeric', month:'short', day:'numeric' });
+  }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function addDaysISO(iso, days){
+    const d = new Date(iso);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
+
+  function lookup(arr, id){ return arr.find(x=>x.id===id) || arr[0]; }
+
+  /* ===================================================================
+     GENERATOR
+     =================================================================== */
+  function generateChallenge(){
+    const f = State.form;
+    const dur = lookup(DURATIONS, f.duration);
+    const dests = DESTINATIONS[f.type] || ['Somewhere beautiful'];
+    const destination = dests[Math.floor(Math.random()*dests.length)];
+    const placeShort = destination.split(',')[0];
+
+    const type  = lookup(VTYPES, f.type).title;
+    const style = lookup(STYLES, f.style).title.toLowerCase();
+    const bud   = lookup(BUDGETS, f.budget).title.toLowerCase();
+    const title = `${type} escape: ${placeShort}`;
+    let summary = `A ${dur.title.toLowerCase()} ${style} trip to ${destination} on a ${bud} budget.`;
+    if (f.wishes && f.wishes.trim()) summary += ` Special wishes: ${f.wishes.trim()}.`;
+
+    const shuffled = [...TASK_POOL].sort(()=>Math.random()-0.5);
+    const tasks = shuffled.slice(0, dur.tasks).map(text => ({ id: uid(), text, completed:false }));
+
+    const start = todayISO();
+    const end = addDaysISO(start, dur.days);
+
+    return {
+      id: uid(),
+      title, destination, summary,
+      vacationType: f.type,
+      duration: f.duration,
+      budget: f.budget,
+      style: f.style,
+      specialWishes: f.wishes,
+      startDate: start,
+      endDate: end,
+      tasks,
+      status: 'planned',
+      rating: 0,
+      impression: '',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  /* ===================================================================
+     RENDERING
+     =================================================================== */
+  function setView(view){
+    State.view = view;
+    document.querySelectorAll('section[id^="view-"]').forEach(s=>s.classList.add('hidden'));
+    document.getElementById('view-'+view).classList.remove('hidden');
+    document.getElementById('view-'+view).classList.remove('fade-in');
+    void document.getElementById('view-'+view).offsetWidth;
+    document.getElementById('view-'+view).classList.add('fade-in');
+
+    document.querySelectorAll('.tabBtn').forEach(b=>{
+      const active = b.dataset.tab === view;
+      b.classList.toggle('text-primary', active);
+      b.classList.toggle('text-textMuted', !active);
+    });
+
+    const titles = {
+      challenge: 'New Challenge',
+      list: 'My Challenges',
+      analytics: 'Analytics',
+      profile: 'Profile'
+    };
+    document.getElementById('headerTitle').textContent = titles[view];
+    document.getElementById('headerExtra').textContent = '';
+
+    render();
+  }
+
+  function render(){
+    if (State.view === 'challenge') renderChallenge();
+    if (State.view === 'list')      renderList();
+    if (State.view === 'analytics') renderAnalytics();
+    if (State.view === 'profile')   renderProfile();
+  }
+
+  /* ========================== TAB 1 ========================== */
+  function renderChallenge(){
+    const r = State.generated;
+    const root = document.getElementById('view-challenge');
+    root.innerHTML = `
+      <!-- Hero -->
+      <section class="rounded-2xl overflow-hidden relative h-44 sm:h-56">
+        <div class="absolute inset-0" style="background:linear-gradient(135deg,#00F0FF55 0%,#8B5CF655 100%);"></div>
+        <div class="absolute inset-0" style="background-image:url('https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=900&q=70'); background-size:cover; background-position:center; mix-blend-mode:overlay; opacity:.55;"></div>
+        <div class="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent"></div>
+        <div class="absolute bottom-4 left-4 right-4">
+          <h2 class="text-xl font-bold mb-1">Design your dream trip</h2>
+          <p class="text-sm text-gray-300">Set parameters to generate a unique vacation challenge.</p>
+        </div>
+      </section>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <!-- Form -->
+        <div class="space-y-5">
+          ${renderTypeGrid()}
+          ${renderSegments('Duration', DURATIONS, State.form.duration, 'duration')}
+          ${renderSegments('Budget',   BUDGETS,    State.form.budget,   'budget')}
+          ${renderSegments('Style',    STYLES,     State.form.style,    'style')}
+          <div class="space-y-2">
+            <label class="text-xs font-semibold text-textMuted uppercase tracking-wider">Special wishes</label>
+            <textarea id="wishesInput" rows="3"
+              class="w-full bg-surface rounded-xl p-4 text-white placeholder-textMuted outline-none focus:ring-2 focus:ring-primary resize-none"
+              placeholder="E.g., I want to try surfing, quiet place with few people…">${escapeHtml(State.form.wishes)}</textarea>
+          </div>
+
+          <button id="generateBtn"
+            class="w-full bg-primary text-black font-bold text-lg py-4 rounded-xl glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            Generate Challenge
+          </button>
+        </div>
+
+        <!-- Result -->
+        <div id="resultPanel">
+          ${ r ? renderResult(r) : renderResultEmpty() }
+        </div>
+      </div>
+    `;
+
+    // Wire form interactions
+    document.getElementById('wishesInput').addEventListener('input', e=>{
+      State.form.wishes = e.target.value;
+    });
+    document.getElementById('generateBtn').onclick = () => {
+      State.generated = generateChallenge();
+      renderChallenge();
+    };
+    wireSegments();
+    wireTypeGrid();
+
+    // Result wiring
+    const saveBtn = document.getElementById('saveChallengeBtn');
+    if (saveBtn) saveBtn.onclick = () => {
+      State.challenges.unshift(State.generated);
+      save();
+      toast('Saved to list!');
+      State.generated = null;
+      renderChallenge();
+    };
+    const regenBtn = document.getElementById('regenBtn');
+    if (regenBtn) regenBtn.onclick = () => {
+      State.generated = generateChallenge();
+      renderChallenge();
+    };
+  }
+
+  function renderTypeGrid(){
+    return `
+      <div class="space-y-2">
+        <label class="text-xs font-semibold text-textMuted uppercase tracking-wider">Type of vacation</label>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="typeGrid">
+          ${ VTYPES.map(t => `
+            <button class="type-chip ${t.id===State.form.type ? 'ring-1 ring-primary bg-primary/10 text-primary' : 'bg-surface text-textMain'} rounded-xl py-3 flex items-center justify-center gap-2 text-sm font-medium" data-type="${t.id}">
+              <i class="fa-solid ${t.icon}"></i> ${t.title}
+            </button>
+          `).join('') }
+        </div>
+      </div>`;
+  }
+  function wireTypeGrid(){
+    document.querySelectorAll('#typeGrid .type-chip').forEach(b=>{
+      b.onclick = () => {
+        State.form.type = b.dataset.type;
+        renderChallenge();
+      };
+    });
+  }
+
+  function renderSegments(label, items, currentId, key){
+    return `
+      <div class="space-y-2">
+        <label class="text-xs font-semibold text-textMuted uppercase tracking-wider">${label}</label>
+        <div class="flex bg-surface rounded-xl p-1 gap-1" data-segment="${key}">
+          ${ items.map(it => `
+            <button data-id="${it.id}" class="seg-btn flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${it.id===currentId ? 'bg-surface2 text-white' : 'text-textMuted'}">${it.title}</button>
+          `).join('') }
+        </div>
+      </div>`;
+  }
+  function wireSegments(){
+    document.querySelectorAll('[data-segment]').forEach(seg=>{
+      const key = seg.dataset.segment;
+      seg.querySelectorAll('.seg-btn').forEach(b=>{
+        b.onclick = () => {
+          State.form[key] = b.dataset.id;
+          renderChallenge();
+        };
+      });
+    });
+  }
+
+  function renderResultEmpty(){
+    return `
+      <div class="bg-surface rounded-2xl p-8 flex flex-col items-center justify-center text-center min-h-[300px]">
+        <i class="fa-solid fa-compass text-5xl text-textMuted mb-4"></i>
+        <h3 class="text-lg font-semibold mb-1">Ready when you are</h3>
+        <p class="text-sm text-textMuted">Hit <span class="text-primary">Generate</span> to roll a destination and a fresh set of tasks.</p>
+      </div>`;
+  }
+
+  function renderResult(c){
+    const t = lookup(VTYPES, c.vacationType);
+    return `
+      <div class="space-y-4 fade-in">
+        <div class="bg-surface rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <p class="text-xs font-semibold text-textMuted uppercase tracking-wider">Your challenge</p>
+            <i class="fa-solid ${t.icon} text-primary text-lg"></i>
+          </div>
+          <h3 class="text-2xl font-bold mb-1">${escapeHtml(c.destination)}</h3>
+          <p class="text-primary font-medium mb-2">${escapeHtml(c.title)}</p>
+          <p class="text-sm text-textMuted">${escapeHtml(c.summary)}</p>
+        </div>
+
+        <div class="bg-surface rounded-2xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="font-semibold text-sm">${c.tasks.length} challenge tasks</p>
+            <span class="text-xs text-textMuted">${fmtDate(c.startDate)} → ${fmtDate(c.endDate)}</span>
+          </div>
+          ${ c.tasks.map(t => `
+            <div class="flex items-start gap-3">
+              <i class="fa-regular fa-circle text-textMuted mt-1"></i>
+              <p class="text-sm">${escapeHtml(t.text)}</p>
+            </div>`).join('') }
+        </div>
+
+        <div class="flex gap-3">
+          <button id="regenBtn" class="flex-1 bg-surface2 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            <i class="fa-solid fa-rotate"></i> Regenerate
+          </button>
+          <button id="saveChallengeBtn" class="flex-1 bg-success text-black font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            <i class="fa-solid fa-tray-arrow-down"></i> Save
+          </button>
+        </div>
+      </div>`;
+  }
+
+  /* ========================== TAB 2 ========================== */
+  function renderList(){
+    const root = document.getElementById('view-list');
+    let list = [...State.challenges];
+    if (State.filter) list = list.filter(c=>c.status===State.filter);
+    list.sort((a,b)=>{
+      switch(State.sort){
+        case 'dateAsc':     return new Date(a.createdAt) - new Date(b.createdAt);
+        case 'destination': return a.destination.localeCompare(b.destination);
+        case 'status':      return a.status.localeCompare(b.status);
+        case 'dateDesc':
+        default:            return new Date(b.createdAt) - new Date(a.createdAt);
+      }
+    });
+
+    root.innerHTML = `
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex gap-2 overflow-x-auto pb-1">
+          ${renderFilterChip('All', null)}
+          ${ STATUSES.map(s=>renderFilterChip(s.title, s.id)).join('') }
+        </div>
+        <select id="sortSelect" class="bg-surface text-white text-sm rounded-lg px-3 py-2 border border-surface2 outline-none">
+          <option value="dateDesc">Newest first</option>
+          <option value="dateAsc">Oldest first</option>
+          <option value="destination">By destination</option>
+          <option value="status">By status</option>
+        </select>
+      </div>
+
+      ${ State.challenges.length === 0
+          ? renderEmpty('tray','No challenges yet','Go to the Challenge tab and generate your first trip.')
+          : (list.length === 0
+              ? renderEmpty('filter-circle-xmark','Nothing matches','Try changing the filter.')
+              : `<div class="grid sm:grid-cols-2 gap-4" id="cardGrid">
+                  ${ list.map(renderCard).join('') }
+                </div>`) }
+    `;
+
+    document.getElementById('sortSelect').value = State.sort;
+    document.getElementById('sortSelect').onchange = e => { State.sort = e.target.value; renderList(); };
+
+    document.querySelectorAll('[data-filter]').forEach(b=>{
+      b.onclick = () => {
+        const v = b.dataset.filter;
+        State.filter = v === 'null' ? null : v;
+        renderList();
+      };
+    });
+
+    document.querySelectorAll('[data-open]').forEach(c=>{
+      c.onclick = () => openDetail(c.dataset.open);
+    });
+  }
+
+  function renderFilterChip(title, id){
+    const active = State.filter === id || (id===null && State.filter===null);
+    return `<button data-filter="${id===null?'null':id}" class="text-sm font-medium px-3 py-1.5 rounded-full whitespace-nowrap ${active?'bg-primary text-black':'bg-surface text-textMain'}">${title}</button>`;
+  }
+
+  function renderCard(c){
+    const t = lookup(VTYPES, c.vacationType);
+    const s = lookup(STATUSES, c.status);
+    const done = c.tasks.filter(t=>t.completed).length;
+    const total = c.tasks.length;
+    const pct = total ? Math.round((done/total)*100) : 0;
+    return `
+      <div data-open="${c.id}" class="bg-surface rounded-2xl p-4 cursor-pointer hover:bg-surface2 transition">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-11 h-11 rounded-full bg-primary/15 text-primary flex items-center justify-center text-lg">
+            <i class="fa-solid ${t.icon}"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold truncate">${escapeHtml(c.title)}</p>
+            <p class="text-sm text-textMuted truncate">${escapeHtml(c.destination)}</p>
+          </div>
+          ${ c.rating > 0 ? `<div class="text-primary text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-star"></i> ${c.rating}/5</div>` : '' }
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="w-2 h-2 rounded-full ${s.dot}"></span>
+          <span class="${s.color}">${s.title}</span>
+          <span class="text-textMuted ml-auto">${fmtDate(c.startDate)} → ${fmtDate(c.endDate)}</span>
+        </div>
+        <div class="mt-3 h-1.5 bg-surface2 rounded-full overflow-hidden">
+          <div class="h-full bg-primary" style="width:${pct}%"></div>
+        </div>
+        <p class="text-[11px] text-textMuted mt-1">${done}/${total} tasks · ${pct}%</p>
+      </div>`;
+  }
+
+  function renderEmpty(icon, title, sub){
+    return `
+      <div class="bg-surface rounded-2xl p-10 flex flex-col items-center justify-center text-center min-h-[260px]">
+        <i class="fa-solid fa-${icon} text-5xl text-textMuted mb-4"></i>
+        <h3 class="text-lg font-semibold mb-1">${title}</h3>
+        <p class="text-sm text-textMuted">${sub}</p>
+      </div>`;
+  }
+
+  /* ========================== DETAIL MODAL ========================== */
+  function openDetail(id){
+    State.detailId = id;
+    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').classList.add('flex');
+    renderDetail();
+  }
+  function closeDetail(){
+    State.detailId = null;
+    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('modal').classList.remove('flex');
+  }
+  document.getElementById('modal').addEventListener('click', e=>{
+    if (e.target.id === 'modal') closeDetail();
+  });
+
+  function renderDetail(){
+    const c = State.challenges.find(x=>x.id===State.detailId);
+    if (!c) { closeDetail(); return; }
+    const t = lookup(VTYPES, c.vacationType);
+
+    document.getElementById('modalContent').innerHTML = `
+      <div class="p-5 space-y-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <input class="w-full bg-transparent text-xl font-bold outline-none focus:bg-surface2 rounded-md px-1 -mx-1" id="detailTitle" value="${escapeAttr(c.title)}" />
+            <input class="w-full bg-transparent text-sm text-textMuted outline-none focus:bg-surface2 rounded-md px-1 -mx-1 mt-1" id="detailDest" value="${escapeAttr(c.destination)}" />
+          </div>
+          <button id="closeModalBtn" class="text-textMuted hover:text-white text-xl px-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <i class="fa-solid ${t.icon} text-primary"></i>
+          <div class="flex bg-surface2 rounded-xl p-1 gap-1 flex-1">
+            ${ STATUSES.map(s=>`
+              <button data-status="${s.id}" class="flex-1 py-2 text-xs font-medium rounded-lg ${c.status===s.id?'bg-surface text-white':'text-textMuted'}">
+                ${s.title}
+              </button>`).join('') }
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-surface2 rounded-xl p-3">
+            <p class="text-[11px] uppercase tracking-wider text-textMuted mb-1">Start</p>
+            <input type="date" id="detailStart" value="${c.startDate}" class="w-full bg-transparent text-sm outline-none">
+          </div>
+          <div class="bg-surface2 rounded-xl p-3">
+            <p class="text-[11px] uppercase tracking-wider text-textMuted mb-1">End</p>
+            <input type="date" id="detailEnd" value="${c.endDate}" class="w-full bg-transparent text-sm outline-none">
+          </div>
+        </div>
+
+        <div class="bg-surface2 rounded-xl p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-semibold text-textMuted uppercase tracking-wider">Tasks</p>
+            <p class="text-xs text-textMuted">${c.tasks.filter(x=>x.completed).length}/${c.tasks.length}</p>
+          </div>
+          <div id="taskList" class="space-y-1">
+            ${ c.tasks.map(t => renderTaskRow(t)).join('') }
+          </div>
+          <button id="addTaskBtn" class="text-primary text-sm flex items-center gap-2 mt-2">
+            <i class="fa-solid fa-circle-plus"></i> Add task
+          </button>
+        </div>
+
+        <div>
+          <p class="text-xs font-semibold text-textMuted uppercase tracking-wider mb-2">Impression / Notes</p>
+          <textarea id="detailNotes" rows="3" placeholder="Write a short review about the trip…"
+            class="w-full bg-surface2 rounded-xl p-3 text-white placeholder-textMuted outline-none focus:ring-2 focus:ring-primary resize-none">${escapeHtml(c.impression || '')}</textarea>
+        </div>
+
+        <div>
+          <p class="text-xs font-semibold text-textMuted uppercase tracking-wider mb-2">Trip rating</p>
+          <div class="flex gap-2" id="ratingRow">
+            ${ [1,2,3,4,5].map(i=>`
+              <button data-rate="${i}" class="text-2xl ${i<=c.rating ? 'text-primary' : 'text-textMuted'}"><i class="fa-${i<=c.rating?'solid':'regular'} fa-star"></i></button>
+            `).join('') }
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button id="deleteBtn" class="flex-1 bg-danger/15 text-danger font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            <i class="fa-solid fa-trash"></i> Delete
+          </button>
+          <button id="saveDetailBtn" class="flex-1 bg-primary text-black font-semibold py-3 rounded-xl">Save changes</button>
+        </div>
+      </div>
+    `;
+
+    // Close
+    document.getElementById('closeModalBtn').onclick = closeDetail;
+
+    // Status
+    document.querySelectorAll('[data-status]').forEach(b=>{
+      b.onclick = () => { c.status = b.dataset.status; persistAndRerenderDetail(c); };
+    });
+
+    // Tasks
+    wireTasks(c);
+    document.getElementById('addTaskBtn').onclick = () => {
+      c.tasks.push({ id: uid(), text:'New task', completed:false });
+      persistAndRerenderDetail(c);
+    };
+
+    // Rating
+    document.querySelectorAll('[data-rate]').forEach(b=>{
+      b.onclick = () => {
+        const v = parseInt(b.dataset.rate,10);
+        c.rating = c.rating === v ? 0 : v;
+        persistAndRerenderDetail(c);
+      };
+    });
+
+    // Save changes (title/dest/dates/notes)
+    document.getElementById('saveDetailBtn').onclick = () => {
+      c.title       = document.getElementById('detailTitle').value.trim() || c.title;
+      c.destination = document.getElementById('detailDest').value.trim()  || c.destination;
+      c.startDate   = document.getElementById('detailStart').value || c.startDate;
+      c.endDate     = document.getElementById('detailEnd').value   || c.endDate;
+      c.impression  = document.getElementById('detailNotes').value;
+      save();
+      toast('Saved');
+      renderList();
+    };
+
+    document.getElementById('deleteBtn').onclick = () => {
+      if (!confirm('Delete this challenge?')) return;
+      State.challenges = State.challenges.filter(x=>x.id!==c.id);
+      save();
+      closeDetail();
+      renderList();
+    };
+  }
+
+  function renderTaskRow(t){
+    return `
+      <div class="flex items-center gap-2 group" data-task="${t.id}">
+        <button class="task-check w-6 h-6 rounded-md flex items-center justify-center ${t.completed?'bg-success text-black':'border border-textMuted'}">
+          ${t.completed?'<i class="fa-solid fa-check text-xs"></i>':''}
+        </button>
+        <div class="task-text flex-1 text-sm ${t.completed?'strike':''}" contenteditable="true">${escapeHtml(t.text)}</div>
+        <button class="task-del opacity-0 group-hover:opacity-100 text-danger/80 hover:text-danger px-2 text-sm"><i class="fa-solid fa-minus-circle"></i></button>
+      </div>`;
+  }
+
+  function wireTasks(c){
+    document.querySelectorAll('#taskList [data-task]').forEach(row=>{
+      const tid = row.dataset.task;
+      const t = c.tasks.find(x=>x.id===tid);
+      row.querySelector('.task-check').onclick = () => {
+        t.completed = !t.completed;
+        persistAndRerenderDetail(c);
+      };
+      row.querySelector('.task-text').addEventListener('blur', e=>{
+        t.text = e.target.textContent.trim() || t.text;
+        save();
+      });
+      row.querySelector('.task-del').onclick = () => {
+        c.tasks = c.tasks.filter(x=>x.id!==tid);
+        persistAndRerenderDetail(c);
+      };
+    });
+  }
+
+  function persistAndRerenderDetail(c){
+    save();
+    renderDetail();
+  }
+
+  /* ========================== TAB 3: Analytics ========================== */
+  function renderAnalytics(){
+    const root = document.getElementById('view-analytics');
+    const arr = State.challenges;
+
+    if (arr.length === 0) {
+      root.innerHTML = renderEmpty('chart-column','No analytics yet','Save your first challenge to see stats here.');
+      return;
+    }
+
+    const completed = arr.filter(c=>c.status==='completed').length;
+    const places = new Set(arr.map(c=>c.destination.toLowerCase())).size;
+    const rated = arr.filter(c=>c.rating > 0);
+    const avg = rated.length ? (rated.reduce((s,c)=>s+c.rating,0)/rated.length) : 0;
+    const typeCounts = arr.reduce((m,c)=>{ m[c.vacationType] = (m[c.vacationType]||0)+1; return m; }, {});
+    const topId = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const topTitle = topId ? lookup(VTYPES, topId).title : '—';
+
+    root.innerHTML = `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        ${ summaryCard('check', completed, 'Completed') }
+        ${ summaryCard('location-dot', places, 'Places') }
+        ${ summaryCard('star', avg.toFixed(1), 'Avg rating') }
+        ${ summaryCard('compass', topTitle, 'Top type') }
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-4">
+        <div class="bg-surface rounded-2xl p-4">
+          <p class="text-sm font-semibold mb-3">Average rating over time</p>
+          <div class="h-56"><canvas id="chartRating"></canvas></div>
+        </div>
+        <div class="bg-surface rounded-2xl p-4">
+          <p class="text-sm font-semibold mb-3">Vacation types</p>
+          <div class="h-56"><canvas id="chartTypes"></canvas></div>
+        </div>
+        <div class="bg-surface rounded-2xl p-4 lg:col-span-2">
+          <p class="text-sm font-semibold mb-3">Completed challenges per month</p>
+          <div class="h-56"><canvas id="chartMonths"></canvas></div>
+        </div>
+      </div>
+    `;
+
+    drawCharts(arr);
+  }
+
+  function summaryCard(icon, value, label){
+    return `
+      <div class="bg-surface rounded-2xl p-4">
+        <i class="fa-solid fa-${icon} text-primary"></i>
+        <p class="text-2xl font-bold mt-1 truncate">${value}</p>
+        <p class="text-xs text-textMuted">${label}</p>
+      </div>`;
+  }
+
+  function drawCharts(arr){
+    // Destroy existing
+    Object.values(State.charts).forEach(c=>{ try{ c.destroy(); }catch(_){} });
+    State.charts = {};
+
+    Chart.defaults.color = '#8E8E93';
+    Chart.defaults.borderColor = '#2C2C2E';
+    Chart.defaults.font.family = '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
+
+    // Rating line
+    const rated = arr.filter(c=>c.rating>0).sort((a,b)=> new Date(a.endDate)-new Date(b.endDate));
+    State.charts.rating = new Chart(document.getElementById('chartRating'), {
+      type: 'line',
+      data: {
+        labels: rated.map(c=>fmtDate(c.endDate)),
+        datasets: [{
+          label: 'Rating',
+          data: rated.map(c=>c.rating),
+          borderColor: '#00F0FF',
+          backgroundColor: 'rgba(0,240,255,0.15)',
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: '#00F0FF',
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        responsive: true,
+        plugins: { legend: { display: false }},
+        scales: {
+          y: { min: 0, max: 5, ticks: { stepSize: 1 }, grid: { color:'#2C2C2E' }},
+          x: { grid: { display:false }},
+        }
+      }
+    });
+
+    // Types donut
+    const types = Object.entries(arr.reduce((m,c)=>{ m[c.vacationType]=(m[c.vacationType]||0)+1; return m; },{}));
+    State.charts.types = new Chart(document.getElementById('chartTypes'), {
+      type: 'doughnut',
+      data: {
+        labels: types.map(([id])=>lookup(VTYPES,id).title),
+        datasets: [{
+          data: types.map(([,v])=>v),
+          backgroundColor: ['#00F0FF','#8B5CF6','#FF453A','#30D158','#FFD60A','#FF9F0A','#5E5CE6'],
+          borderColor: '#1C1C1E',
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        responsive: true,
+        plugins: { legend: { position: 'right', labels:{ color:'#fff' } }}
+      }
+    });
+
+    // Months bar
+    const completed = arr.filter(c=>c.status==='completed');
+    const monthMap = {};
+    completed.forEach(c=>{
+      const d = new Date(c.endDate);
+      const key = d.toLocaleDateString(undefined,{ year:'numeric', month:'short' });
+      monthMap[key] = (monthMap[key]||0) + 1;
+    });
+    const monthKeys = Object.keys(monthMap);
+    State.charts.months = new Chart(document.getElementById('chartMonths'), {
+      type: 'bar',
+      data: {
+        labels: monthKeys,
+        datasets: [{
+          data: monthKeys.map(k=>monthMap[k]),
+          backgroundColor: '#00F0FF',
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        responsive: true,
+        plugins: { legend: { display: false }},
+        scales: {
+          y: { beginAtZero:true, ticks:{ stepSize:1, precision:0 }, grid:{ color:'#2C2C2E' }},
+          x: { grid:{ display:false }}
+        }
+      }
+    });
+  }
+
+  /* ========================== TAB 4: Profile ========================== */
+  function renderProfile(){
+    const root = document.getElementById('view-profile');
+    const p = State.profile;
+
+    const completed = State.challenges.filter(c=>c.status==='completed').length;
+    const places = new Set(State.challenges.map(c=>c.destination.toLowerCase())).size;
+    const top = State.challenges.filter(c=>c.rating>0).sort((a,b)=>b.rating-a.rating)[0];
+
+    root.innerHTML = `
+      <div class="grid lg:grid-cols-3 gap-5">
+        <!-- Avatar card -->
+        <div class="lg:col-span-1 bg-surface rounded-2xl p-6 flex flex-col items-center text-center">
+          <div class="relative">
+            <div class="w-32 h-32 rounded-full overflow-hidden border-2 border-primary"
+                 style="background:linear-gradient(135deg,#00F0FF55,#8B5CF655);">
+              ${ p.avatarData
+                  ? `<img src="${p.avatarData}" class="w-full h-full object-cover" alt="avatar">`
+                  : `<div class="w-full h-full flex items-center justify-center text-5xl text-white/90"><i class="fa-solid fa-user"></i></div>` }
+            </div>
+            <label class="absolute -bottom-1 -right-1 w-10 h-10 bg-primary text-black rounded-full flex items-center justify-center cursor-pointer shadow-lg">
+              <i class="fa-solid fa-camera"></i>
+              <input type="file" id="avatarInput" accept="image/*" class="hidden">
+            </label>
+          </div>
+          <div class="flex items-center gap-2 mt-4">
+            <h2 class="text-xl font-bold">${escapeHtml(p.name)}</h2>
+            <button id="editNameBtn" class="text-primary"><i class="fa-solid fa-pen-to-square"></i></button>
+          </div>
+          <p class="text-xs text-textMuted mt-1">Vacation Challenge user</p>
+        </div>
+
+        <!-- Stats card -->
+        <div class="lg:col-span-2 bg-surface rounded-2xl p-5">
+          <p class="text-xs font-semibold text-textMuted uppercase tracking-wider mb-4">Stats</p>
+          <div class="space-y-3">
+            ${ statRow('check', 'Completed challenges', completed) }
+            ${ statRow('location-dot', 'Visited places', places) }
+            ${ top
+                ? statRow('star', `Best trip (${top.rating}★)`, escapeHtml(top.title))
+                : statRow('star', 'Best trip', '—') }
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings card -->
+      <div class="bg-surface rounded-2xl p-5 space-y-4">
+        <p class="text-xs font-semibold text-textMuted uppercase tracking-wider">Settings</p>
+
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-circle-half-stroke text-primary"></i>
+            <span>Appearance</span>
+          </div>
+          <div class="flex bg-surface2 rounded-xl p-1 gap-1">
+            ${ ['system','light','dark'].map(v => `
+              <button data-appearance="${v}" class="px-3 py-1.5 text-sm rounded-lg ${State.appearance===v?'bg-surface text-white':'text-textMuted'}">${v[0].toUpperCase()+v.slice(1)}</button>
+            `).join('') }
+          </div>
+        </div>
+
+        <div class="border-t border-surface2 pt-4">
+          <button id="resetDataBtn" class="text-danger flex items-center gap-2">
+            <i class="fa-solid fa-arrow-rotate-left"></i> Reset all data
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('avatarInput').onchange = e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        State.profile.avatarData = ev.target.result;
+        save();
+        renderProfile();
+      };
+      reader.readAsDataURL(f);
+    };
+
+    document.getElementById('editNameBtn').onclick = () => {
+      const v = prompt('Enter a new display name:', State.profile.name);
+      if (v !== null) {
+        State.profile.name = v.trim() || 'Traveler';
+        save();
+        renderProfile();
+      }
+    };
+
+    document.querySelectorAll('[data-appearance]').forEach(b=>{
+      b.onclick = () => {
+        State.appearance = b.dataset.appearance;
+        localStorage.setItem('vc.appearance', State.appearance);
+        applyAppearance();
+        renderProfile();
+      };
+    });
+
+    document.getElementById('resetDataBtn').onclick = () => {
+      if (!confirm('This will remove all saved challenges and reset your profile. Continue?')) return;
+      State.challenges = [];
+      State.profile = { name:'Traveler', avatarData:null };
+      save();
+      toast('All data reset');
+      renderProfile();
+    };
+  }
+
+  function statRow(icon, label, value){
+    return `
+      <div class="flex items-center justify-between gap-3 py-2 border-b border-surface2 last:border-b-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <i class="fa-solid fa-${icon} text-primary w-5 text-center"></i>
+          <span class="text-sm truncate">${label}</span>
+        </div>
+        <span class="text-sm font-semibold truncate">${value}</span>
+      </div>`;
+  }
+
+  /* ===================================================================
+     APPEARANCE
+     =================================================================== */
+  function applyAppearance(){
+    // For simplicity the design is dark-first.
+    // "Light" mode swaps a couple of palette tokens, "system" follows OS.
+    const root = document.documentElement;
+    let mode = State.appearance;
+    if (mode === 'system') {
+      mode = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    if (mode === 'light') {
+      document.body.classList.add('lightmode');
+      document.body.style.background = '#F2F2F7';
+      document.body.style.color = '#000';
+    } else {
+      document.body.classList.remove('lightmode');
+      document.body.style.background = '#000';
+      document.body.style.color = '#fff';
+    }
+  }
+
+  /* ===================================================================
+     UTILS
+     =================================================================== */
+  function escapeHtml(s){
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  /* ===================================================================
+     INIT
+     =================================================================== */
+  document.querySelectorAll('.tabBtn').forEach(b=>{
+    b.onclick = () => setView(b.dataset.tab);
+  });
+
+  load();
+  applyAppearance();
+  setView('challenge');
+  </script>
+</body>
+</html>
